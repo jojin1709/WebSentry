@@ -17,7 +17,7 @@ export async function safeFetch(input: URL, maxRedirects: number, timeoutMs: num
   const started = Date.now();
 
   for (let i = 0; i <= maxRedirects; i++) {
-    await validateTarget(current);
+    validateTarget(current);
     const response = await fetch(current.toString(), {
       method: "GET",
       redirect: "manual",
@@ -45,7 +45,7 @@ export async function safeFetch(input: URL, maxRedirects: number, timeoutMs: num
 }
 
 export async function fetchText(url: URL, timeoutMs: number, maxBytes: number): Promise<{ response: Response; text: string }> {
-  await validateTarget(url);
+  validateTarget(url);
   const response = await fetch(url.toString(), {
     method: "GET",
     redirect: "manual",

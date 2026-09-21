@@ -10,6 +10,11 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20.9%2B-green.svg)](https://nodejs.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-orange.svg)](https://workers.cloudflare.com)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-websentryx.vercel.app-brightgreen)](https://websentryx.vercel.app)
+
+---
+
+### [Try it live → websentryx.vercel.app](https://websentryx.vercel.app)
 
 ---
 
