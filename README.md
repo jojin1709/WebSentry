@@ -2,9 +2,9 @@
 
 # WebSentry
 
-### Privacy-first, ephemeral website security monitor for the modern web.
+### Privacy-first website security scanner.
 
-**Real-time scanning. Zero persistence. No login required.**
+**13 scan categories · 150+ checks · Zero persistence · No login required.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20.9%2B-green.svg)](https://nodejs.org)
@@ -18,76 +18,82 @@
 
 ---
 
-**WebSentry** analyzes any public website and produces a detailed security report in seconds. No databases. No scan history. No accounts. Just paste a URL and get answers.
+</div>
 
-It checks DNS records, HTTP configuration, security headers, cookie flags, CORS policies, robots.txt, security.txt, HTTPS enforcement, and technology signatures — then scores the result deterministically.
+## What is WebSentry?
 
-**This repository is WebSentry: the full stack, run locally or deploy to Vercel + Cloudflare Workers.**
+WebSentry is a full-stack, privacy-first website security scanner. Paste any public URL and get a real-time, comprehensive security report in seconds — **no accounts, no databases, no stored results**.
+
+It runs on **Vercel** (Next.js frontend) and **Cloudflare Workers** (Hono API + scanner backend). The browser sends a target URL, the Worker validates it, performs bounded HTTP requests, probes for vulnerabilities, and streams results back via SSE.
 
 **Developed by JOJIN JOHN**
 
 ---
 
-</div>
+## Features
 
-## Table of Contents
+### 13 Scan Categories
 
-- [Table of Contents](#table-of-contents)
-- [What is WebSentry?](#what-is-websentry)
-  - [Why WebSentry Exists](#why-websentry-exists)
-  - [Privacy-First Design](#privacy-first-design)
-- [Key Capabilities](#key-capabilities)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Deploy the Worker](#1-deploy-the-worker)
-  - [Configure the Frontend](#2-configure-the-frontend)
-  - [Deploy to Vercel](#3-deploy-the-frontend-to-vercel)
-  - [Test a Real Scan](#4-test-a-real-scan)
-- [Local Development](#local-development)
-- [API Reference](#api-reference)
-- [Runtime Notes](#runtime-notes)
-- [Operational Limits](#operational-limits)
-- [No-Storage Model](#no-storage-model)
-- [Authorized Use](#authorized-use)
-- [License](#license)
+| # | Category | What It Checks |
+|---|----------|----------------|
+| 1 | **Security Headers** | CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP, X-XSS-Protection (15+ header checks) |
+| 2 | **TLS / HTTPS** | Certificate Transparency logs, HSTS preload status, certificate issuer/expiry, HTTPS enforcement |
+| 3 | **DNS & Email** | A, AAAA, MX, NS, TXT, CAA records, SPF/DMARC policy analysis |
+| 4 | **Cookies** | Secure, HttpOnly, SameSite attribute inspection |
+| 5 | **CORS** | Preflight testing, Allow-Origin, Allow-Credentials analysis |
+| 6 | **Exposed Paths** | 35+ sensitive paths: .git, .env, .DS_Store, debug endpoints, admin panels, config files |
+| 7 | **Mixed Content** | HTTP resource detection on HTTPS pages |
+| 8 | **Subresource Integrity** | External script/stylesheet SRI coverage |
+| 9 | **JWT / Tokens** | Detect exposed JWT tokens in HTML, meta tags, and cookies |
+| 10 | **Forms** | CSRF protection, form method analysis |
+| 11 | **SEO** | Meta tags, Open Graph, canonical, viewport, heading structure |
+| 12 | **Accessibility** | Alt text, form labels, heading hierarchy, ARIA landmarks, skip links |
+| 13 | **Performance** | Page size, render-blocking resources, response time |
+| 14 | **Infrastructure** | HTTP/2, HTTP/3, IPv6, DNSSEC detection |
+| 15 | **Files** | robots.txt, security.txt parsing |
+| 16 | **Technologies** | 80+ technology signatures (frameworks, CMS, CDN, analytics, JS libraries) |
 
----
+### 150+ Security Checks
 
-## What is WebSentry?
+Every scan produces detailed findings with **severity**, **evidence**, and **recommendations**:
 
-WebSentry is a privacy-first website security monitor that performs comprehensive configuration and security-header analysis against any public URL. It runs as a serverless application on **Vercel** (Next.js frontend) and **Cloudflare Workers** (Hono API + scanner backend).
+- **Critical** — Immediate security risk (exposed .env, .git, SQL dumps)
+- **High** — Significant vulnerability (missing HSTS, exposed admin panels, JWT in source)
+- **Medium** — Configuration concern (CSP unsafe-inline, missing SRI, debug endpoints)
+- **Low** — Minor improvement (HTTP/1.1, missing Permissions-Policy)
+- **Info** — Observation (SPF record, certificate validity, CT logs)
 
-### Why WebSentry Exists
+### Deterministic Security Score
 
-Most website security scanners require accounts, store scan history, and persist target data. WebSentry takes the opposite approach: paste a URL, get a real-time report, and nothing is saved. It is designed for developers, security-conscious teams, and anyone who wants quick visibility into a site's security posture without the overhead of a SaaS platform.
-
-### Privacy-First Design
-
-- **No login** — no accounts, no cookies, no sessions stored.
-- **No database** — no PostgreSQL, Redis, KV, D1, or Durable Objects.
-- **No scan history** — results stream to the browser and disappear when the tab closes.
-- **No persistent target storage** — the URL you scan is never written to disk.
-
-> [!IMPORTANT]
-> This does **not** mean that Cloudflare, Vercel, DNS providers, or the target website can never have operational or network logs. WebSentry is designed to minimize its own data footprint, not to make requests invisible at every infrastructure layer.
+A 0–100 score is calculated from findings severity, HTTPS status, and pass/fail results. No randomness.
 
 ---
 
-## Key Capabilities
+## Privacy Model
 
-| Category | Checks |
-| --- | --- |
-| **DNS** | A, AAAA, MX, NS, TXT, CAA records |
-| **HTTP** | Status code, response timing, content type, server header |
-| **TLS / HTTPS** | HTTPS reachability, HSTS posture, redirect enforcement |
-| **Security Headers** | CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP |
-| **Cookies** | Secure, HttpOnly, SameSite flag inspection |
-| **CORS** | Cross-origin response inspection |
-| **Files** | robots.txt, /.well-known/security.txt |
-| **Technology** | Signature-based technology detection |
-| **Scoring** | Deterministic security score from observed findings |
-| **Real-time** | SSE stream with scan, progress, result, and error events |
+| Feature | WebSentry |
+|---------|-----------|
+| Login required | No |
+| Database | None |
+| Scan history | None |
+| Stored reports | None |
+| KV / D1 / R2 | None |
+| Target URL persisted | No |
+| Results streamed | Yes (SSE) |
+
+> **Note:** Operational infrastructure (Cloudflare, Vercel, DNS providers) can still have its own network logs. WebSentry minimizes its own data footprint but does not claim network traffic is invisible everywhere.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 16, React 19, TypeScript |
+| API / Worker | Hono, Cloudflare Workers |
+| Styling | Custom CSS, dark mode |
+| DNS Resolution | Cloudflare DoH (1.1.1.1/dns-query) |
+| Deployment | Vercel (frontend), Cloudflare Workers (backend) |
 
 ---
 
@@ -96,9 +102,39 @@ Most website security scanners require accounts, store scan history, and persist
 ```text
 websentry/
 ├── apps/
-│   ├── web/          # Next.js 16 frontend (Vercel)
-│   └── worker/       # Hono API + scanner (Cloudflare Workers)
-├── docs/
+│   ├── web/              # Next.js frontend
+│   │   ├── app/
+│   │   │   ├── page.tsx          # Main scanner UI
+│   │   │   └── globals.css       # Styles + dark mode
+│   │   └── .env.local
+│   └── worker/           # Hono API + scanners
+│       ├── src/
+│       │   ├── index.ts                 # Main orchestrator
+│       │   ├── types/index.ts           # TypeScript interfaces
+│       │   ├── lib/
+│       │   │   ├── target.ts            # URL validation
+│       │   │   └── fetch-safe.ts        # Bounded fetch + redirect detection
+│       │   └── scanners/
+│       │       ├── dns.ts               # DNS + SPF/DMARC
+│       │       ├── headers.ts           # Security headers (deep CSP)
+│       │       ├── tls.ts               # TLS + CT logs + HSTS preload
+│       │       ├── cookies.ts           # Cookie attribute inspection
+│       │       ├── cors.ts              # CORS preflight testing
+│       │       ├── cors-detailed.ts     # CORS deep analysis
+│       │       ├── files.ts             # robots.txt + security.txt
+│       │       ├── technology.ts        # 80+ technology signatures
+│       │       ├── paths.ts             # 35+ exposed path probes
+│       │       ├── mixed-content.ts     # Mixed content detection
+│       │       ├── forms.ts             # CSRF + form analysis
+│       │       ├── seo.ts               # SEO meta tags + Open Graph
+│       │       ├── accessibility.ts     # A11y checks
+│       │       ├── performance.ts       # Performance metrics
+│       │       ├── infrastructure.ts    # HTTP/2, IPv6, DNSSEC
+│       │       ├── sri.ts              # Subresource Integrity
+│       │       ├── source-exposure.ts   # Version/source leakage
+│       │       ├── jwt.ts              # JWT token detection
+│       │       └── score.ts            # Deterministic scoring
+│       └── wrangler.toml
 ├── package.json
 └── README.md
 ```
@@ -111,8 +147,8 @@ websentry/
 
 - **Node.js 20.9+**
 - **npm**
-- A **Cloudflare** account (for the Worker)
-- A **Vercel** account (for the frontend)
+- A **Cloudflare** account
+- A **Vercel** account
 
 ### 1. Deploy the Worker
 
@@ -123,13 +159,13 @@ npx wrangler login
 npx wrangler deploy
 ```
 
-Wrangler will print the Worker URL:
+Wrangler prints the Worker URL:
 
-```text
+```
 https://websentry-api.<your-subdomain>.workers.dev
 ```
 
-Verify it:
+Verify:
 
 ```bash
 curl https://websentry-api.<your-subdomain>.workers.dev/health
@@ -143,7 +179,7 @@ curl https://websentry-api.<your-subdomain>.workers.dev/health
 
 Create `apps/web/.env.local`:
 
-```env
+```
 NEXT_PUBLIC_API_URL=https://websentry-api.<your-subdomain>.workers.dev
 ```
 
@@ -157,84 +193,43 @@ npm run dev
 
 Open **http://localhost:3000**.
 
-### 3. Deploy the Frontend to Vercel
+### 3. Deploy to Vercel
 
-1. Import the repository into Vercel.
-2. Set the **Root Directory** to `apps/web`.
-3. Add this environment variable in the Vercel dashboard:
+1. Import the repository into Vercel
+2. Set **Root Directory** to `apps/web`
+3. Add environment variable:
 
    | Key | Value |
    |---|---|
    | `NEXT_PUBLIC_API_URL` | `https://websentry-api.<your-subdomain>.workers.dev` |
 
-4. Deploy.
+4. Deploy
 
-### 4. Test a Real Scan
-
-The browser sends:
-
-```http
-POST /api/scan
-Content-Type: application/json
-
-{"url":"https://example.com"}
-```
-
-The response is an **SSE stream** with events:
-
-```text
-event: scan        — scan started
-event: progress    — intermediate update
-event: result      — final report
-event: error       — something went wrong
-```
-
-The `result` event contains the complete ephemeral security report.
-
----
-
-## Local Development
-
-Run both services locally:
-
-**Worker:**
+### 4. Push to GitHub
 
 ```bash
-cd apps/worker
-npm install
-npx wrangler dev --port 8787
+git init && git add -A && git commit -m "Initial commit"
+git remote add origin https://github.com/your-username/websentry.git
+git push -u origin main
 ```
-
-**Frontend** (with local worker):
-
-```bash
-echo "NEXT_PUBLIC_API_URL=http://localhost:8787" > apps/web/.env.local
-
-cd apps/web
-npm install
-npm run dev
-```
-
-Open **http://localhost:3000**. The frontend will call the local worker at `http://localhost:8787`.
 
 ---
 
 ## API Reference
 
 | Endpoint | Method | Description |
-| --- | --- | --- |
-| `/health` | GET | Health check. Returns `{"ok":true,"service":"websentry-api"}` |
-| `/api/scan` | POST | Start a scan. Body: `{"url":"https://example.com"}`. Returns an SSE stream. |
+|---|---|---|
+| `/health` | GET | Health check → `{"ok":true}` |
+| `/api/scan` | POST | Start scan. Body: `{"url":"https://example.com"}`. Returns SSE stream. |
 
----
+### SSE Events
 
-## Runtime Notes
-
-> [!NOTE]
-> **TLS / Certificate Internals:** The scanner intentionally does **not** provide low-level certificate internals from a Workers-only runtime. The TLS section reports HTTPS reachability and HSTS posture and explicitly labels certificate internals as not inspected.
-
-> [!NOTE]
-> **Technology Detection:** Technology detection is signature-based and should be treated as an **observation**, not proof of a complete technology inventory.
+| Event | Payload |
+|---|---|
+| `scan` | Scan started |
+| `progress` | Intermediate check complete |
+| `result` | Full report (final event) |
+| `error` | Error message |
 
 ---
 
@@ -242,37 +237,23 @@ Open **http://localhost:3000**. The frontend will call the local worker at `http
 
 WebSentry is a **public-web scanner**, not a general network scanner:
 
-- Only accepts `http://` and `https://` URLs.
-- Ports are limited to **80** and **443**.
-- Private/reserved IP ranges are blocked before outbound requests.
-- Redirect destinations are validated and redirect counts are limited.
-- Response size is bounded and a request timeout is enforced.
-
-For public production deployments, configure **Cloudflare's edge/WAF/rate-limiting** controls for abuse protection. The application itself does not create a persistent rate-limit database.
-
----
-
-## No-Storage Model
-
-The application code does **not** create KV, D1, R2, Durable Objects, PostgreSQL, Redis, or any other persistence binding. Results are held in the Worker request and streamed back to the browser.
-
----
-
-## Authorized Use
-
-> [!WARNING]
-> Only scan websites you own or are explicitly authorized to assess. WebSentry is designed for **defensive security review** and configuration visibility; it does not implement credential attacks, exploit delivery, destructive testing, or arbitrary port scanning.
+- Only accepts `http://` and `https://` URLs
+- Ports limited to **80** and **443**
+- Private/reserved IP ranges blocked
+- Redirect count and destination validated
+- Response size bounded (2MB)
+- Request timeout enforced
 
 ---
 
 ## License
 
-WebSentry is released under the [MIT License](LICENSE).
+MIT — use freely, deploy freely, scan responsibly.
 
 ---
 
 <div align="center">
 
-**Built with care by [JOJIN JOHN](https://github.com/jojin1709)**
+**Developed by [JOJIN JOHN](https://github.com/jojin1709)**
 
 </div>
