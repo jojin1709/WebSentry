@@ -1,0 +1,12 @@
+{
+  "name": "websentry",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": ["apps/web", "apps/worker"],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "dev:worker": "npm --workspace apps/worker run dev",
+    "deploy:worker": "npm --workspace apps/worker run deploy"
+  }
+}
