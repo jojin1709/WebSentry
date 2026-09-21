@@ -2,13 +2,15 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { normalizeTarget, validateTarget } from "./lib/target";
 import { safeFetch } from "./lib/fetch-safe";
-import { scanDns } from "./scanners/dns";
+import { scanDns, dnsFindings } from "./scanners/dns";
 import { scanHeaders } from "./scanners/headers";
 import { scanCookies } from "./scanners/cookies";
 import { scanCors } from "./scanners/cors";
 import { scanRobots, scanSecurityTxt } from "./scanners/files";
 import { detectTechnologies } from "./scanners/technology";
 import { calculateScore, countSeverities } from "./scanners/score";
+import { scanTls } from "./scanners/tls";
+import { scanPaths } from "./scanners/paths";
 import type { Finding, ScanResult } from "./types";
 
 interface Env {
@@ -27,7 +29,7 @@ app.use("*", cors({
   maxAge: 86400,
 }));
 
-app.get("/", (c) => c.json({ name: "WebSentry API", version: "1.0.0", storage: "none" }));
+app.get("/", (c) => c.json({ name: "WebSentry API", version: "2.0.0", storage: "none" }));
 app.get("/health", (c) => c.json({ ok: true, service: "websentry-api" }));
 
 function jsonHeaders() {
@@ -77,7 +79,7 @@ app.post("/api/scan", async (c) => {
   if (typeof payload.url !== "string" || payload.url.length > 2048) return c.json({ error: "Provide a valid URL up to 2048 characters." }, 400, jsonHeaders());
 
   let target: URL;
-  try { target = normalizeTarget(payload.url); await validateTarget(target); } catch (error) {
+  try { target = normalizeTarget(payload.url); validateTarget(target); } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : "Target validation failed." }, 400, jsonHeaders());
   }
 
@@ -98,9 +100,12 @@ app.post("/api/scan", async (c) => {
       try {
         send("scan", { scanId, target: target.toString(), status: "started" });
 
+        const totalSteps = 9;
+
         send("progress", { key: "dns", name: "DNS analysis", status: "running" });
         const dns = await scanDns(target.hostname);
-        checks.push({ key: "dns", name: "DNS analysis", status: "complete", summary: `${dns.A.length} A, ${dns.AAAA.length} AAAA, ${dns.MX.length} MX records observed.` });
+        findings.push(...dnsFindings(dns));
+        checks.push({ key: "dns", name: "DNS analysis", status: "complete", summary: `${dns.A.length} A, ${dns.AAAA.length} AAAA, ${dns.MX.length} MX records. SPF: ${dns.spf.found ? dns.spf.policy ?? "found" : "missing"}. DMARC: ${dns.dmarc.found ? dns.dmarc.policy ?? "found" : "missing"}.` });
         send("progress", { key: "dns", name: "DNS analysis", status: "complete", summary: checks.at(-1)?.summary });
 
         send("progress", { key: "http", name: "HTTP analysis", status: "running" });
@@ -111,9 +116,6 @@ app.post("/api/scan", async (c) => {
         checks.push({ key: "http", name: "HTTP analysis", status: "complete", summary: `${response.status} ${response.statusText}` });
         send("progress", { key: "http", name: "HTTP analysis", status: "complete", summary: `${response.status} ${response.statusText}` });
 
-        if (finalUrl.protocol !== "https:") {
-          findings.push({ id: "https-not-enforced", category: "HTTPS", severity: "high", status: "fail", title: "HTTPS is not enforced", evidence: `The final URL remained on ${finalUrl.protocol}//${finalUrl.host}.`, recommendation: "Serve the site over HTTPS and redirect HTTP requests to HTTPS." });
-        }
         if (response.headers.get("server")) {
           findings.push({ id: "server-header", category: "Information Disclosure", severity: "info", status: "info", title: "Server header is exposed", evidence: response.headers.get("server")!.slice(0, 200), recommendation: "Consider whether detailed server identification is necessary." });
         }
@@ -121,7 +123,9 @@ app.post("/api/scan", async (c) => {
         send("progress", { key: "headers", name: "Security headers", status: "running" });
         const headerFindings = scanHeaders(response);
         findings.push(...headerFindings);
-        checks.push({ key: "headers", name: "Security headers", status: "complete", summary: `${headerFindings.filter((f) => f.status === "pass").length} headers present.` });
+        const passCount = headerFindings.filter((f) => f.status === "pass").length;
+        const failCount = headerFindings.filter((f) => f.status === "fail").length;
+        checks.push({ key: "headers", name: "Security headers", status: "complete", summary: `${passCount} headers present, ${failCount} issues found.` });
         send("progress", { key: "headers", name: "Security headers", status: "complete", summary: checks.at(-1)?.summary });
 
         send("progress", { key: "cookies", name: "Cookie security", status: "running" });
@@ -149,11 +153,19 @@ app.post("/api/scan", async (c) => {
         checks.push({ key: "technology", name: "Technology detection", status: "complete", summary: technologies.length ? technologies.join(", ") : "No supported technology signatures detected." });
         send("progress", { key: "technology", name: "Technology detection", status: "complete", summary: checks.at(-1)?.summary });
 
-        send("progress", { key: "tls", name: "HTTPS/TLS posture", status: "running" });
-        checks.push({ key: "tls", name: "HTTPS/TLS posture", status: "complete", summary: finalUrl.protocol === "https:" ? "HTTPS reachable; certificate internals are not inspected in this Workers-only build." : "HTTPS not enforced." });
-        send("progress", { key: "tls", name: "HTTPS/TLS posture", status: "complete", summary: checks.at(-1)?.summary });
+        send("progress", { key: "tls", name: "TLS / HTTPS analysis", status: "running" });
+        const tlsResult = await scanTls(target.hostname, finalUrl, response.headers.get("strict-transport-security"), timeoutMs);
+        findings.push(...tlsResult.findings);
+        checks.push({ key: "tls", name: "TLS / HTTPS analysis", status: "complete", summary: `HTTPS: ${tlsResult.tls.https ? "yes" : "no"}. HSTS: ${tlsResult.tls.hsts ? "yes" : "no"}. CT logs: ${tlsResult.tls.ctLogsFound ? "found" : "not found"}.` });
+        send("progress", { key: "tls", name: "TLS / HTTPS analysis", status: "complete", summary: checks.at(-1)?.summary });
 
-        const score = calculateScore(findings, finalUrl.protocol === "https:");
+        send("progress", { key: "paths", name: "Exposed paths scan", status: "running" });
+        const pathResult = await scanPaths(finalUrl, timeoutMs, maxResponseBytes);
+        findings.push(...pathResult.findings);
+        checks.push({ key: "paths", name: "Exposed paths scan", status: "complete", summary: `${pathResult.paths.length} sensitive path(s) detected.` });
+        send("progress", { key: "paths", name: "Exposed paths scan", status: "complete", summary: checks.at(-1)?.summary });
+
+        const score = calculateScore(findings, tlsResult.tls.https);
         const result: ScanResult = {
           scanId,
           target: target.toString(),
@@ -165,11 +177,12 @@ app.post("/api/scan", async (c) => {
           checks,
           findings,
           http: { status: response.status, statusText: response.statusText, responseTimeMs: fetched.elapsedMs, contentType: response.headers.get("content-type"), server: response.headers.get("server"), redirects: fetched.redirects },
-          tls: { https: finalUrl.protocol === "https:", hsts: Boolean(response.headers.get("strict-transport-security")), certificate: "not-inspected" },
+          tls: tlsResult.tls,
           dns,
           cookies: cookieScan.cookies,
           technologies,
           files: { robots, securityTxt },
+          exposedPaths: pathResult.paths,
         };
         send("result", result);
         send("scan", { scanId, status: "completed" });

@@ -18,6 +18,37 @@ export interface CheckResult {
   summary: string;
 }
 
+export interface DnsResult {
+  A: string[];
+  AAAA: string[];
+  MX: string[];
+  NS: string[];
+  TXT: string[];
+  CAA: string[];
+  spf: { found: boolean; policy: string | null };
+  dmarc: { found: boolean; policy: string | null; rua: string | null };
+}
+
+export interface TlsInfo {
+  https: boolean;
+  hsts: boolean;
+  hstsMaxAge: number | null;
+  hstsIncludeSubDomains: boolean;
+  hstsPreload: boolean;
+  hstsPreloadListed: boolean | null;
+  ctLogsFound: boolean;
+  certificateIssuer: string | null;
+  certificateExpiry: string | null;
+}
+
+export interface ExposedPath {
+  path: string;
+  status: number;
+  severity: "critical" | "high" | "medium" | "low";
+  title: string;
+  description: string;
+}
+
 export interface ScanResult {
   scanId: string;
   target: string;
@@ -36,19 +67,8 @@ export interface ScanResult {
     server: string | null;
     redirects: string[];
   };
-  tls: {
-    https: boolean;
-    hsts: boolean;
-    certificate: "not-inspected";
-  };
-  dns: {
-    A: string[];
-    AAAA: string[];
-    MX: string[];
-    NS: string[];
-    TXT: string[];
-    CAA: string[];
-  };
+  tls: TlsInfo;
+  dns: DnsResult;
   cookies: Array<{
     name: string;
     secure: boolean;
@@ -60,4 +80,5 @@ export interface ScanResult {
     robots: { found: boolean; sitemapCount: number; disallowCount: number };
     securityTxt: { found: boolean; contactCount: number; expires: string | null };
   };
+  exposedPaths: ExposedPath[];
 }

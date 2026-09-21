@@ -11,10 +11,15 @@ function timeoutSignal(ms: number): AbortSignal {
   return AbortSignal.timeout(ms);
 }
 
+function getDomain(url: URL): string {
+  return url.hostname.toLowerCase().replace(/^www\./, "");
+}
+
 export async function safeFetch(input: URL, maxRedirects: number, timeoutMs: number): Promise<SafeFetchResult> {
   let current = new URL(input.toString());
   const redirects: string[] = [];
   const started = Date.now();
+  const originalDomain = getDomain(current);
 
   for (let i = 0; i <= maxRedirects; i++) {
     validateTarget(current);
@@ -34,6 +39,12 @@ export async function safeFetch(input: URL, maxRedirects: number, timeoutMs: num
       if (i === maxRedirects) throw new Error(`Redirect limit (${maxRedirects}) exceeded.`);
       const next = normalizeTarget(new URL(location, current).toString());
       redirects.push(next.toString());
+
+      const nextDomain = getDomain(next);
+      if (nextDomain !== originalDomain) {
+        throw new Error(`Open redirect detected: ${current.hostname} -> ${next.hostname}. The target redirected to a different domain.`);
+      }
+
       current = next;
       continue;
     }
