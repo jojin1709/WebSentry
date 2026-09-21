@@ -41,39 +41,42 @@ const SENSITIVE_PATHS = [
 ];
 
 const BLOCKED_PATHS = [
-  "/.git/config",
-  "/.git/HEAD",
-  "/.env",
-  "/.env.local",
-  "/.env.production",
-  "/.env.backup",
-  "/.htpasswd",
-  "/dump.sql",
-  "/database.sql",
-  "/.ssh/",
+  "/.git/config", "/.git/HEAD", "/.env", "/.env.local", "/.env.production",
+  "/.env.backup", "/.htpasswd", "/dump.sql", "/database.sql", "/.ssh/",
 ];
 
 const NOT_FOUND_MARKERS = [
-  "404 not found",
-  "page not found",
-  "the page you were looking for",
-  "this page does not exist",
-  "the requested url was not found",
-  "nothing was found at this url",
-  "error 404",
-  "we can't seem to find the page",
-  "sorry, the page you requested",
-  "that page doesn't exist",
-  "you seem to have lost",
-  "no results found",
-  "not found",
+  "404 not found", "page not found", "the page you were looking for",
+  "this page does not exist", "the requested url was not found",
+  "nothing was found at this url", "error 404", "we can't seem to find the page",
+  "sorry, the page you requested", "that page doesn't exist",
+  "you seem to have lost", "no results found", "not found",
+  "the resource requested could not be found", "this is not the web page you were looking for",
+  "does not exist", "couldn't find the page", "lost your way",
+  "try searching", "return to homepage", "404 error",
+  "we're sorry", "something went wrong", "page could not be found",
 ];
 
-function isLikelyNotFound(body: string, status: number): boolean {
+const LIKELY_REAL_CONTENT = [
+  "application/json", "text/plain",
+  "Access-Control", "Authorization", "ETag",
+  "worker-src", "script-src", "connect-src",
+  "<!DOCTYPE", "<html", "<?xml",
+];
+
+function isLikelyNotFound(body: string, status: number, contentType: string | null): boolean {
   if (status !== 200) return false;
-  const lower = body.toLowerCase().slice(0, 5000);
+  if (body.length < 200) return true;
+  const lower = body.toLowerCase().slice(0, 8000);
   for (const marker of NOT_FOUND_MARKERS) {
     if (lower.includes(marker)) return true;
+  }
+  if (contentType?.includes("text/html")) {
+    const textOnly = lower.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (textOnly.length < 100) return true;
+    for (const real of LIKELY_REAL_CONTENT) {
+      if (lower.includes(real.toLowerCase())) return false;
+    }
   }
   return false;
 }
@@ -95,36 +98,24 @@ export async function scanPaths(
             method: "GET",
             redirect: "manual",
             signal: AbortSignal.timeout(timeoutMs),
-            headers: {
-              "User-Agent": "WebSentry/1.0 (+https://websentry.example)",
-              "Accept": "*/*",
-            },
+            headers: { "User-Agent": "WebSentry/1.0 (+https://websentry.example)", "Accept": "*/*" },
             cf: { cacheTtl: 0 },
           });
           if (res.status === 200 || res.status === 403) {
+            const ct = res.headers.get("content-type");
             const body = await res.text().catch(() => "");
-            if (isLikelyNotFound(body, res.status)) return null;
+            if (isLikelyNotFound(body, res.status, ct)) return null;
             return { ...item, status: res.status };
           }
           return null;
-        } catch {
-          return null;
-        }
+        } catch { return null; }
       }),
     );
 
     for (const r of results) {
       if (r.status === "fulfilled" && r.value) {
         const item = r.value;
-        const ep: ExposedPath = {
-          path: item.path,
-          status: item.status,
-          severity: item.severity,
-          title: item.title,
-          description: item.desc,
-        };
-        exposed.push(ep);
-
+        exposed.push({ path: item.path, status: item.status, severity: item.severity, title: item.title, description: item.desc });
         const isHighRisk = BLOCKED_PATHS.includes(item.path);
         findings.push({
           id: `path-${item.path.replace(/[^a-z0-9]/gi, "-")}`,
@@ -133,9 +124,7 @@ export async function scanPaths(
           status: "fail",
           title: item.title,
           evidence: `${item.path} returned HTTP ${item.status}. ${item.desc}`,
-          recommendation: isHighRisk
-            ? `Immediately block public access to ${item.path}. This path exposes sensitive data.`
-            : `Review whether ${item.path} should be publicly accessible and restrict access if not needed.`,
+          recommendation: isHighRisk ? `Immediately block public access to ${item.path}. This path exposes sensitive data.` : `Review whether ${item.path} should be publicly accessible and restrict access if not needed.`,
         });
       }
     }

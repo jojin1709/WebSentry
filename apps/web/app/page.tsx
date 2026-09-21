@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Check, CircleAlert, Clock3, Cookie, Download, FileText, Globe2, KeyRound, LockKeyhole, Radar, RefreshCw, Search, Server, Settings2, ShieldAlert, ShieldCheck, ShieldX, Zap } from "lucide-react";
+import { ArrowRight, Check, CircleAlert, Clipboard, ClipboardCheck, Clock3, Cookie, Download, FileText, Globe2, KeyRound, LockKeyhole, Radar, RefreshCw, Search, Server, Settings2, ShieldAlert, ShieldCheck, ShieldX, Zap, AlertTriangle } from "lucide-react";
 
 type Severity = "critical" | "high" | "medium" | "low" | "info";
 type Finding = { id:string; category:string; severity:Severity; status:string; title:string; evidence:string; recommendation:string };
@@ -41,6 +41,7 @@ const sidebarItems = [
   { id: "cors", icon: Radar, label: "CORS" },
   { id: "redirects", icon: ArrowRight, label: "Redirects" },
   { id: "paths", icon: ShieldX, label: "Exposed Paths" },
+  { id: "source", icon: AlertTriangle, label: "Info Leakage" },
   { id: "mixed", icon: CircleAlert, label: "Mixed Content" },
   { id: "sri", icon: ShieldCheck, label: "SRI" },
   { id: "jwt", icon: KeyRound, label: "JWT / Tokens" },
@@ -70,6 +71,14 @@ function FindingList({ findings: f }: { findings: Finding[] }) {
       <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{fi.evidence.slice(0,200)}</div>
     </div>
   ))}</>;
+}
+
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`skeleton ${className || ""}`} />;
+}
+
+function SkeletonCard() {
+  return <div className="card"><Skeleton className="h24 w40" /><Skeleton /><Skeleton className="w60" /><Skeleton className="w80" /></div>;
 }
 
 export default function Home() {
@@ -108,6 +117,7 @@ export default function Home() {
   }, [result]);
 
   const completed = Object.values(progress).filter(v => v === "complete").length;
+  const errored = Object.values(progress).filter(v => v === "error").length;
   const percent = running ? Math.round((completed / steps.length) * 100) : result ? 100 : 0;
 
   const normalizeUrl = useCallback((input: string) => { const t = input.trim(); if (!t) return ""; if (/^https?:\/\//i.test(t)) return t; return `https://${t}`; }, []);
@@ -140,13 +150,35 @@ export default function Home() {
     } catch (e) { setError(e instanceof Error ? e.message : "Scan failed."); } finally { setRunning(false); }
   }, [url, API, normalizeUrl, validateUrl]);
 
-  function reset() { setResult(null); setError(""); setProgress({}); setUrl(""); setActiveSection("overview"); window.scrollTo({top:0,behavior:"smooth"}); }
+  function reset() { setResult(null); setError(""); setProgress({}); setActiveSection("overview"); window.scrollTo({top:0,behavior:"smooth"}); }
 
   function exportJson() {
     if (!result) return;
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = `websentry-${new URL(result.finalUrl).hostname}-${Date.now()}.json`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  function exportCsv() {
+    if (!result) return;
+    const rows = [["ID","Category","Severity","Status","Title","Evidence","Recommendation"]];
+    result.findings.forEach(f => rows.push([f.id,f.category,f.severity,f.status,f.title,`"${f.evidence.replace(/"/g,'""')}"`,`"${f.recommendation.replace(/"/g,'""')}"`]));
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `websentry-${new URL(result.finalUrl).hostname}-${Date.now()}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  function exportMarkdown() {
+    if (!result) return;
+    const h = new URL(result.finalUrl).hostname;
+    let md = `# WebSentry Report — ${h}\n\n`;
+    md += `**URL:** ${result.finalUrl}\n**Scanned:** ${new Date(result.scannedAt).toLocaleString()}\n**Duration:** ${result.durationMs}ms\n**Score:** ${result.score}/100\n\n`;
+    md += `## Findings (${result.findings.length})\n\n`;
+    result.findings.forEach(f => { md += `### [${f.severity.toUpperCase()}] ${f.title}\n- **Category:** ${f.category}\n- **Evidence:** ${f.evidence}\n- **Recommendation:** ${f.recommendation}\n\n`; });
+    const blob = new Blob([md], { type: "text/markdown" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `websentry-${h}-${Date.now()}.md`; a.click(); URL.revokeObjectURL(a.href);
   }
 
   function scrollToSection(id: string) { setActiveSection(id); sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" }); }
@@ -167,7 +199,7 @@ export default function Home() {
       <div>
         <div className="eyebrow">Privacy-first website security</div>
         <h1>Know what your website <span className="gradient">exposes.</span></h1>
-        <p>WebSentry performs a comprehensive, ephemeral security analysis. 13 scan categories: headers, TLS, DNS, email security, cookies, CORS, exposed files, SRI, JWT tokens, forms, SEO, accessibility, performance, and infrastructure.</p>
+        <p>WebSentry performs a comprehensive, ephemeral security analysis. 13+ scan categories: headers, TLS, DNS, email security, cookies, CORS, exposed files, information leakage, SRI, JWT tokens, forms, SEO, accessibility, performance, and infrastructure.</p>
         <div className="scanbar">
           <Globe2 size={20} style={{margin:"15px 0 0 13px",color:"var(--muted)"}}/>
           <input value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!running)scan()}} placeholder="Enter a domain or URL (e.g. example.com)" aria-label="Website URL" />
@@ -182,12 +214,12 @@ export default function Home() {
     </section>
 
     {(running || result) && <section className="section" id="report">
-      {running && <div className="panel"><div className="scanhead"><div><h2>Scanning {url}</h2><div style={{color:"var(--muted)",fontSize:12,marginTop:4}}>13 scan categories running. Results are not persisted.</div></div><span className="statuspill">Live scan</span></div><div className="progressbody"><div className="progressbar"><div style={{width:`${Math.max(4,percent)}%`}}/></div><div className="progressmeta"><span>{completed} of {steps.length} checks complete</span><span>{percent}%</span></div><div className="steps">{steps.map(([key,name]) => <div className={`step ${progress[key]==="complete"?"done":progress[key]==="running"?"running":""}`} key={key}><div className="stepicon">{progress[key]==="complete"?<Check size={15}/>:progress[key]==="running"?<Radar size={15}/>:<span>•</span>}</div>{name}</div>)}</div></div></div>}
-      {result && <Report result={result} onNew={reset} onExport={exportJson} activeSection={activeSection} onNavigate={scrollToSection} R={R}/>}
+      {running && <div className="panel"><div className="scanhead"><div><h2>Scanning {url}</h2><div style={{color:"var(--muted)",fontSize:12,marginTop:4}}>13 scan categories running. Results are not persisted.</div></div><span className="statuspill">Live scan</span></div><div className="progressbody" aria-live="polite" aria-label="Scan progress"><div className="progressbar"><div style={{width:`${Math.max(4,percent)}%`}}/></div><div className="progressmeta"><span>{completed} of {steps.length} checks complete{errored > 0 ? ` · ${errored} errors` : ""}</span><span>{percent}%</span></div><div className="steps">{steps.map(([key,name]) => <div className={`step ${progress[key]==="complete"?"done":progress[key]==="running"?"running":progress[key]==="error"?"error":""}`} key={key}><div className="stepicon">{progress[key]==="complete"?<Check size={15}/>:progress[key]==="running"?<Radar size={15}/>:progress[key]==="error"?<AlertTriangle size={15}/>:<span>•</span>}</div>{name}</div>)}</div></div></div>}
+      {result && <Report result={result} onNew={reset} onExportJson={exportJson} onExportCsv={exportCsv} onExportMd={exportMarkdown} activeSection={activeSection} onNavigate={scrollToSection} R={R}/>}
     </section>}
 
-    {!running && !result && <section className="section" id="features"><div className="panel" style={{padding:30}}><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16}}>{[
-      [ShieldCheck,"Security Headers","Deep CSP, HSTS, X-Frame-Options and 15+ header checks."],[LockKeyhole,"TLS / HTTPS","Certificate Transparency, HSTS preload, certificate details."],[Globe2,"DNS & Email","A, AAAA, MX, NS, TXT, CAA + SPF/DMARC analysis."],[Cookie,"Cookies","Secure, HttpOnly, SameSite attribute inspection."],[Radar,"CORS","Preflight testing, Allow-Origin/Credentials analysis."],[ShieldX,"Exposed Paths","35 sensitive paths: .git, .env, .DS_Store, debug endpoints."],[KeyRound,"JWT / Tokens","Detect exposed JWT tokens in HTML and cookies."],[Zap,"Performance","Page size, render-blocking resources, response time."],[Settings2,"Accessibility","Alt text, form labels, heading hierarchy, ARIA landmarks."],[Server,"Infrastructure","HTTP/2, HTTP/3, IPv6, DNSSEC detection."],[Search,"SEO","Meta tags, Open Graph, canonical, heading structure."],[CircleAlert,"Findings","150+ checks with evidence and recommendations."],
+    {!running && !result && <section className="section" id="features"><div className="panel" style={{padding:30}}><div className="features-grid">{[
+      [ShieldCheck,"Security Headers","Deep CSP, HSTS, X-Frame-Options and 15+ header checks."],[LockKeyhole,"TLS / HTTPS","Certificate Transparency, HSTS preload, certificate details."],[Globe2,"DNS & Email","A, AAAA, MX, NS, TXT, CAA + SPF/DMARC analysis."],[Cookie,"Cookies","Secure, HttpOnly, SameSite attribute inspection."],[Radar,"CORS","Preflight testing, Allow-Origin/Credentials analysis."],[ShieldX,"Exposed Paths","35 sensitive paths: .git, .env, .DS_Store, debug endpoints."],[AlertTriangle,"Info Leakage","Source maps, debug endpoints, config files, version leaks."],[KeyRound,"JWT / Tokens","Detect exposed JWT tokens in HTML and cookies."],[Zap,"Performance","Page size, render-blocking resources, response time."],[Settings2,"Accessibility","Alt text, form labels, heading hierarchy, ARIA landmarks."],[Server,"Infrastructure","HTTP/2, HTTP/3, IPv6, DNSSEC detection."],[Search,"SEO","Meta tags, Open Graph, canonical, heading structure."],[FileText,"Files","robots.txt, security.txt parsing and analysis."],[CircleAlert,"Findings","150+ checks with evidence and recommendations."],
     ].map(([Icon,title,text]) => <div className="card" key={String(title)}><Icon size={22} color="var(--blue)"/><div className="cardtitle" style={{marginTop:12}}>{String(title)}</div><div style={{color:"var(--muted)",fontSize:13,lineHeight:1.6}}>{String(text)}</div></div>)}</div></div></section>}
 
     <section className="section" id="how"><div className="panel" style={{padding:30}}><div className="eyebrow">How it works</div><h2 style={{fontSize:32,margin:"0 0 10px",letterSpacing:"-.04em"}}>A real scan, returned directly to your browser.</h2><p style={{color:"var(--muted)",maxWidth:760,lineHeight:1.7,marginTop:0}}>The browser sends the target to a Cloudflare Worker. The Worker validates the URL, resolves DNS via Cloudflare DoH, performs bounded HTTP requests, probes for exposed paths, checks CT logs, analyzes email security, tests CORS preflight, checks mixed content, analyzes forms, scans SEO/accessibility/performance/infrastructure, and streams each completed check back to the browser via SSE. No database. No persistence.</p></div></section>
@@ -196,18 +228,35 @@ export default function Home() {
   </main>;
 }
 
-function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { result: Result; onNew: () => void; onExport: () => void; activeSection: string; onNavigate: (id: string) => void; R: React.FC<{ id: string; children: React.ReactNode }> }) {
+function Report({ result, onNew, onExportJson, onExportCsv, onExportMd, activeSection, onNavigate, R }: { result: Result; onNew: () => void; onExportJson: () => void; onExportCsv: () => void; onExportMd: () => void; activeSection: string; onNavigate: (id: string) => void; R: React.FC<{ id: string; children: React.ReactNode }> }) {
   const [filter, setFilter] = useState<Severity | "all">("all");
+  const [copied, setCopied] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
   const filtered = useMemo(() => filter === "all" ? result.findings : result.findings.filter((f) => f.severity === filter), [filter, result.findings]);
   const sv = Math.max(0, Math.min(100, result.score));
   const hf = result.findings.filter((f) => f.category === "Security Headers");
   const tf = result.findings.filter((f) => f.category === "TLS");
   const ef = result.findings.filter((f) => f.category === "Email Security");
+  const srcF = result.findings.filter((f) => f.category === "Information Leakage");
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setShowExportMenu(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function copyFindings() {
+    const text = result.findings.map(f => `[${f.severity.toUpperCase()}] ${f.title}\n${f.evidence}\n→ ${f.recommendation}`).join("\n\n");
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
 
   return (
     <div className="panel">
       <div className="results">
-        <aside className="sidebar">
+        <aside className="sidebar" aria-label="Report sections">
           {sidebarItems.map(({ id, icon: Icon, label }) => (
             <div className={`sideitem ${activeSection === id ? "active" : ""}`} key={id} onClick={() => onNavigate(id)}><Icon size={15} />{label}</div>
           ))}
@@ -215,14 +264,25 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
         <div className="report">
           <div className="reporttop">
             <div><h2>{new URL(result.finalUrl).hostname}</h2><p>Scanned {new Date(result.scannedAt).toLocaleString()} · {result.durationMs} ms · {result.findings.length} findings</p></div>
-            <div className="actions"><button className="export-btn" onClick={onExport}><Download size={13}/>Export JSON</button><button className="secondary" onClick={onNew}>New Scan</button></div>
+            <div className="actions">
+              <div ref={exportRef} style={{position:"relative"}}>
+                <button className="export-btn" onClick={() => setShowExportMenu(!showExportMenu)}><Download size={13}/>Export</button>
+                {showExportMenu && <div style={{position:"absolute",right:0,top:"100%",marginTop:4,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,boxShadow:"var(--shadow)",zIndex:50,minWidth:140,padding:4}}>
+                  <button style={{display:"block",width:"100%",textAlign:"left",border:0,background:"none",padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,color:"var(--text)"}} onClick={() => { onExportJson(); setShowExportMenu(false); }}>JSON</button>
+                  <button style={{display:"block",width:"100%",textAlign:"left",border:0,background:"none",padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,color:"var(--text)"}} onClick={() => { onExportCsv(); setShowExportMenu(false); }}>CSV</button>
+                  <button style={{display:"block",width:"100%",textAlign:"left",border:0,background:"none",padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,color:"var(--text)"}} onClick={() => { onExportMd(); setShowExportMenu(false); }}>Markdown</button>
+                </div>}
+              </div>
+              <button className={`copy-btn ${copied ? "copied" : ""}`} onClick={copyFindings}>{copied ? <><ClipboardCheck size={13}/>Copied!</> : <><Clipboard size={13}/>Copy</>}</button>
+              <button className="secondary" onClick={onNew}>New Scan</button>
+            </div>
           </div>
 
           <R id="overview"><div className="cards">
             <div className="card"><div className="cardtitle">Security Score</div><div className="score"><div className="ring" style={{ "--score": sv } as React.CSSProperties}><strong>{sv}</strong></div><div><strong style={{fontSize:13}}>/ 100</strong><div><small>From {result.findings.length} findings.</small></div></div></div></div>
             <div className="card"><div className="cardtitle">Findings</div>{(["critical","high","medium","low","info"] as Severity[]).map((s)=><div className="metric" key={s}><span style={{textTransform:"capitalize"}}>{s}</span><Badge severity={s}>{result.counts[s]}</Badge></div>)}</div>
             <div className="card"><div className="cardtitle">Quick Info</div>
-              <div className="metric"><span>HTTP</span><strong>{result.http.status}</strong></div>
+              <div className="metric"><span>HTTP</span><strong>{result.http.status} {result.http.statusText}</strong></div>
               <div className="metric"><span>HTTPS</span><strong>{result.tls.https?"Yes":"No"}</strong></div>
               <div className="metric"><span>HSTS</span><strong>{result.tls.hsts?"Yes":"No"}</strong></div>
               <div className="metric"><span>HTTP Version</span><strong>{result.infrastructure.http3?"HTTP/3":result.infrastructure.http2?"HTTP/2":"HTTP/1.1"}</strong></div>
@@ -232,12 +292,13 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
               <div className="metric"><span>Response</span><strong>{result.http.responseTimeMs}ms</strong></div>
               <div className="metric"><span>Redirects</span><strong>{result.http.redirects.length}</strong></div>
               <div className="metric"><span>Server</span><strong>{result.http.server||"Not disclosed"}</strong></div>
+              {result.http.contentType && <div className="metric"><span>Content-Type</span><strong style={{fontSize:11}}>{result.http.contentType}</strong></div>}
             </div>
           </div></R>
 
           <R id="headers"><div className="section-title" style={{marginTop:24}}>Security Headers</div>
             <div className="cards"><div className="card" style={{gridColumn:"span 2"}}><div className="cardtitle">Header Analysis</div>
-              {hf.filter(f=>f.category==="Security Headers").map(f=><div className="metric" key={f.id}><span>{f.title.replace(" is missing","").replace(" is present","")}</span><Badge severity={f.status==="pass"?"info":f.severity}>{f.status==="pass"?"Found":"Missing"}</Badge></div>)}
+              {hf.map(f=><div className="metric" key={f.id}><span>{f.title.replace(" is missing","").replace(" is present","")}</span><Badge severity={f.status==="pass"?"info":f.severity}>{f.status==="pass"?"Found":"Missing"}</Badge></div>)}
             </div><div className="card"><div className="cardtitle">Details</div>
               {hf.filter(f=>f.status!=="pass").length===0?<div style={{color:"var(--muted)",fontSize:13}}>All headers present.</div>:hf.filter(f=>f.status!=="pass").slice(0,8).map(f=><div key={f.id} style={{marginBottom:10}}><div style={{fontSize:12,fontWeight:700}}>{f.title}</div><div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{f.evidence.slice(0,150)}</div></div>)}
             </div></div>
@@ -285,7 +346,9 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
               <div className="metric"><span>Preflight</span><strong>{result.corsDetail.preflightRequired?"Supported":"Not supported"}</strong></div>
               <div className="metric"><span>Allow-Origin</span><strong style={{fontSize:11,wordBreak:"break-all"}}>{result.corsDetail.allowOrigin||"None"}</strong></div>
               <div className="metric"><span>Allow-Methods</span><strong style={{fontSize:11}}>{result.corsDetail.allowMethods||"None"}</strong></div>
+              <div className="metric"><span>Allow-Headers</span><strong style={{fontSize:11}}>{result.corsDetail.allowHeaders||"None"}</strong></div>
               <div className="metric"><span>Allow-Credentials</span><strong>{result.corsDetail.allowCredentials||"None"}</strong></div>
+              <div className="metric"><span>Expose-Headers</span><strong style={{fontSize:11}}>{result.corsDetail.exposeHeaders||"None"}</strong></div>
               <div className="metric"><span>Max-Age</span><strong>{result.corsDetail.maxAge||"None"}</strong></div>
             </SectionCard>
           </R>
@@ -302,6 +365,12 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
             </SectionCard>
           </R>
 
+          <R id="source"><div className="section-title">Information Leakage</div>
+            <SectionCard title={`Source Exposure (${srcF.length})`}>
+              {srcF.length===0?<div style={{color:"var(--muted)",fontSize:13}}>No information leakage detected.</div>:<FindingList findings={srcF}/>}
+            </SectionCard>
+          </R>
+
           <R id="mixed"><div className="section-title">Mixed Content</div>
             <SectionCard title="Mixed Content">
               {result.findings.filter(f=>f.category==="Mixed Content").length===0?<div style={{color:"var(--muted)",fontSize:13}}>No issues. {result.tls.https?"Fully HTTPS.":"Site not HTTPS."}</div>:<FindingList findings={result.findings.filter(f=>f.category==="Mixed Content")}/>}
@@ -310,8 +379,10 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
 
           <R id="sri"><div className="section-title">Subresource Integrity</div>
             <SectionCard title="SRI Analysis">
+              <div className="metric"><span>Total scripts</span><strong>{result.sri.totalScripts}</strong></div>
               <div className="metric"><span>External scripts</span><strong>{result.sri.externalScripts}</strong></div>
               <div className="metric"><span>Scripts with SRI</span><strong>{result.sri.scriptsWithIntegrity}</strong></div>
+              <div className="metric"><span>Total links</span><strong>{result.sri.totalLinks}</strong></div>
               <div className="metric"><span>External stylesheets</span><strong>{result.sri.externalLinks}</strong></div>
               <div className="metric"><span>Styles with SRI</span><strong>{result.sri.linksWithIntegrity}</strong></div>
               {result.findings.filter(f=>f.category==="Subresource Integrity").length>0&&<div style={{marginTop:10}}><FindingList findings={result.findings.filter(f=>f.category==="Subresource Integrity")}/></div>}
@@ -328,9 +399,10 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
 
           <R id="forms"><div className="section-title">Forms</div>
             <SectionCard title={`Form Security (${result.forms.length})`}>
-              {result.forms.length===0?<div style={{color:"var(--muted)",fontSize:13}}>No forms detected.</div>:result.forms.map((f,i)=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid var(--border)"}}><div style={{fontSize:12,fontWeight:700}}>#{i+1}: {f.method} {f.action}</div><div style={{display:"flex",gap:6,marginTop:4}}>
+              {result.forms.length===0?<div style={{color:"var(--muted)",fontSize:13}}>No forms detected.</div>:result.forms.map((f,i)=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid var(--border)"}}><div style={{fontSize:12,fontWeight:700}}>#{i+1}: {f.method} {f.action}</div><div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
                 <Badge severity={f.hasCsrf?"info":"medium"}>{f.hasCsrf?"CSRF OK":"No CSRF"}</Badge>
                 {f.inputTypes.includes("password")&&<Badge severity="low">Password field</Badge>}
+                {f.hasAutocompleteOff&&<Badge severity="info">autocomplete=off</Badge>}
                 <Badge severity="info">Inputs: {f.inputTypes.join(", ")||"none"}</Badge>
               </div></div>)}
               {result.findings.filter(f=>f.category==="Form Security").length>0&&<div style={{marginTop:10}}><FindingList findings={result.findings.filter(f=>f.category==="Form Security")}/></div>}
@@ -344,6 +416,7 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
               <div className="metric"><span>Canonical</span><strong style={{fontSize:11}}>{result.seo.canonical||"Missing"}</strong></div>
               <div className="metric"><span>Viewport</span><strong>{result.seo.viewport?"Present":"Missing"}</strong></div>
               <div className="metric"><span>Lang</span><strong>{result.seo.lang||"Missing"}</strong></div>
+              {result.seo.robots && <div className="metric"><span>Robots</span><strong style={{fontSize:11,wordBreak:"break-all",maxWidth:200}}>{result.seo.robots}</strong></div>}
             </div><div className="card"><div className="cardtitle">Open Graph</div>
               <div className="metric"><span>og:title</span><strong style={{fontSize:11}}>{result.seo.ogTitle||"Missing"}</strong></div>
               <div className="metric"><span>og:description</span><strong style={{fontSize:11}}>{result.seo.ogDescription||"Missing"}</strong></div>
@@ -369,6 +442,9 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
               <div className="metric"><span>Skip link</span><strong>{result.accessibility.hasSkipLink?"Yes":"No"}</strong></div>
               <div className="metric"><span>ARIA landmarks</span><strong>{result.accessibility.hasAriaLandmarks?"Yes":"No"}</strong></div>
               <div className="metric"><span>Role attributes</span><strong>{result.accessibility.hasRoleAttributes}</strong></div>
+              {Object.keys(result.accessibility.headingStructure).length > 0 && <>
+                <div className="metric"><span>Heading structure</span><strong>{Object.entries(result.accessibility.headingStructure).map(([k,v])=>`${k}:${v}`).join(", ")}</strong></div>
+              </>}
             </div></div>
             <SectionCard title="Accessibility Findings"><FindingList findings={result.findings.filter(f=>f.category==="Accessibility")}/></SectionCard>
           </R>
@@ -381,10 +457,13 @@ function Report({ result, onNew, onExport, activeSection, onNavigate, R }: { res
               <div className="metric"><span>Stylesheets</span><strong>{result.performance.resourceCount.stylesheets}</strong></div>
               <div className="metric"><span>Images</span><strong>{result.performance.resourceCount.images}</strong></div>
               <div className="metric"><span>Iframes</span><strong>{result.performance.resourceCount.iframes}</strong></div>
+              <div className="metric"><span>Fonts</span><strong>{result.performance.resourceCount.fonts}</strong></div>
+              <div className="metric"><span>Other</span><strong>{result.performance.resourceCount.other}</strong></div>
             </div><div className="card"><div className="cardtitle">Render Blocking</div>
               <div className="metric"><span>Blocking scripts</span><strong>{result.performance.renderBlockingScripts}</strong></div>
               <div className="metric"><span>Blocking styles</span><strong>{result.performance.renderBlockingStyles}</strong></div>
-              <div className="metric"><span>Script breakdown</span><strong style={{fontSize:11}}>{result.performance.totalScriptSize}</strong></div>
+              <div className="metric"><span>Script size</span><strong style={{fontSize:11}}>{result.performance.totalScriptSize}</strong></div>
+              <div className="metric"><span>Style size</span><strong style={{fontSize:11}}>{result.performance.totalStyleSize}</strong></div>
             </div></div>
             <SectionCard title="Performance Findings"><FindingList findings={result.findings.filter(f=>f.category==="Performance")}/></SectionCard>
           </R>
