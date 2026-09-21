@@ -6,7 +6,6 @@ export function detectTechnologies(html: string, headers: Headers): string[] {
   const via = headers.get("via")?.toLowerCase() ?? "";
   const setCookie = headers.get("set-cookie")?.toLowerCase() ?? "";
 
-  // Frontend Frameworks
   if (source.includes("__next_data__") || source.includes("/_next/")) found.add("Next.js");
   if (source.includes("data-reactroot") || source.includes('id="__next"') || /react[.\s]/i.test(html)) found.add("React");
   if (source.includes("ng-version") || source.includes("[ng") || source.includes("ng-app")) found.add("Angular");
@@ -18,27 +17,23 @@ export function detectTechnologies(html: string, headers: Headers): string[] {
   if (source.includes("astro-") || source.includes("data-astro")) found.add("Astro");
   if (source.includes("remix-") || source.includes("__remix")) found.add("Remix");
 
-  // CMS
   if (source.includes("wp-content/") || source.includes("wp-includes/")) found.add("WordPress");
   if (source.includes("drupal") || source.includes("sites/default/files")) found.add("Drupal");
   if (source.includes("joomla") || source.includes("/media/jui/")) found.add("Joomla");
-  if (source.includes("shopify") || source.includes("cdn.shopify.com")) found.add("Shopify");
-  if (source.includes("squarespace") || source.includes("squarespace.com")) found.add("Squarespace");
+  if (source.includes("cdn.shopify.com")) found.add("Shopify");
+  if (source.includes("squarespace.com")) found.add("Squarespace");
   if (source.includes("wix.com") || source.includes("wixstatic.com")) found.add("Wix");
-  if (source.includes("ghost-") || source.includes("ghost.io")) found.add("Ghost");
+  if (source.includes("ghost.io") || source.includes("/ghost/")) found.add("Ghost");
   if (source.includes("magento") || source.includes("/static/version")) found.add("Magento");
-  if (source.includes("prestashop") || source.includes("/themes/")) found.add("PrestaShop");
-  if (source.includes("contentful") || source.includes("ctfassets.net")) found.add("Contentful");
-  if (source.includes("strapi") || source.includes("/api/content-types")) found.add("Strapi");
+  if (source.includes("ctfassets.net")) found.add("Contentful");
+  if (source.includes("/api/content-types")) found.add("Strapi");
 
-  // CSS Frameworks
   if (source.includes("tailwindcss") || source.includes("tailwind")) found.add("Tailwind CSS");
-  if (source.includes("bootstrap") || source.includes("bootstrap.min")) found.add("Bootstrap");
+  if (source.includes("bootstrap.min") || source.includes("bootstrap/")) found.add("Bootstrap");
   if (source.includes("materialize") || source.includes("material-icons")) found.add("Material Design");
-  if (source.includes("bulma") || source.includes("bulma.min")) found.add("Bulma");
+  if (source.includes("bulma.min") || source.includes("bulma/")) found.add("Bulma");
   if (source.includes("chakra-ui") || source.includes("data-chakra")) found.add("Chakra UI");
 
-  // JS Libraries
   if (source.includes("jquery") || source.includes("jquery.min")) found.add("jQuery");
   if (source.includes("lodash") || source.includes("underscore")) found.add("Lodash/Underscore");
   if (source.includes("d3.") || source.includes("d3.min")) found.add("D3.js");
@@ -48,7 +43,6 @@ export function detectTechnologies(html: string, headers: Headers): string[] {
   if (source.includes("dayjs")) found.add("Day.js");
   if (source.includes("axios") || source.includes("axios.min")) found.add("Axios");
 
-  // Analytics & Tracking
   if (source.includes("googletagmanager.com") || source.includes("gtag(")) found.add("Google Tag Manager");
   if (source.includes("google-analytics.com") || source.includes("ga(")) found.add("Google Analytics");
   if (source.includes("googletagmanager.com/gtag")) found.add("Google Analytics 4");
@@ -61,7 +55,6 @@ export function detectTechnologies(html: string, headers: Headers): string[] {
   if (source.includes("amplitude.com") || source.includes("amplitude.getInstance")) found.add("Amplitude");
   if (source.includes("heap.io") || source.includes("heap(")) found.add("Heap Analytics");
 
-  // Server / Backend
   if (server.includes("nginx")) found.add("Nginx");
   if (server.includes("apache")) found.add("Apache");
   if (server.includes("cloudflare")) found.add("Cloudflare");
@@ -75,7 +68,6 @@ export function detectTechnologies(html: string, headers: Headers): string[] {
   if (server.includes("litespeed")) found.add("LiteSpeed");
   if (server.includes("caddy")) found.add("Caddy");
 
-  // X-Powered-By
   if (powered.includes("express")) found.add("Express");
   if (powered.includes("php")) found.add("PHP");
   if (powered.includes("asp.net")) found.add("ASP.NET");
@@ -88,26 +80,22 @@ export function detectTechnologies(html: string, headers: Headers): string[] {
   if (powered.includes("koa")) found.add("Koa");
   if (powered.includes("hapi")) found.add("Hapi");
 
-  // CDN / Cloud
-  if (headers.has("cf-ray") || source.includes("cloudflare")) found.add("Cloudflare");
+  if (headers.has("cf-ray")) found.add("Cloudflare");
   if (via.includes("varnish") || headers.has("x-varnish")) found.add("Varnish");
   if (source.includes("cdn.jsdelivr.net")) found.add("jsDelivr CDN");
   if (source.includes("unpkg.com")) found.add("unpkg CDN");
 
-  // Security
   if (source.includes("grecaptcha") || source.includes("google.com/recaptcha")) found.add("Google reCAPTCHA");
   if (source.includes("hcaptcha.com") || source.includes("hcaptcha")) found.add("hCaptcha");
   if (source.includes("challenges.cloudflare.com")) found.add("Cloudflare Turnstile");
   if (source.includes("sentry.io") || source.includes("Sentry.init")) found.add("Sentry");
   if (source.includes("bugsnag.com") || source.includes("Bugsnag.init")) found.add("Bugsnag");
 
-  // Languages (from headers)
   if (powered.includes("php/")) found.add("PHP");
   if (powered.includes("python")) found.add("Python");
   if (powered.includes("node")) found.add("Node.js");
   if (powered.includes("go")) found.add("Go");
 
-  // Cookie-based detection
   if (setCookie.includes("PHPSESSID")) found.add("PHP");
   if (setCookie.includes("JSESSIONID")) found.add("Java");
   if (setCookie.includes("connect.sid")) found.add("Express");

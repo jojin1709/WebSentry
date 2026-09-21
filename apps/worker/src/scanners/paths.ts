@@ -53,6 +53,31 @@ const BLOCKED_PATHS = [
   "/.ssh/",
 ];
 
+const NOT_FOUND_MARKERS = [
+  "404 not found",
+  "page not found",
+  "the page you were looking for",
+  "this page does not exist",
+  "the requested url was not found",
+  "nothing was found at this url",
+  "error 404",
+  "we can't seem to find the page",
+  "sorry, the page you requested",
+  "that page doesn't exist",
+  "you seem to have lost",
+  "no results found",
+  "not found",
+];
+
+function isLikelyNotFound(body: string, status: number): boolean {
+  if (status !== 200) return false;
+  const lower = body.toLowerCase().slice(0, 5000);
+  for (const marker of NOT_FOUND_MARKERS) {
+    if (lower.includes(marker)) return true;
+  }
+  return false;
+}
+
 export async function scanPaths(
   baseUrl: URL,
   timeoutMs: number,
@@ -61,9 +86,6 @@ export async function scanPaths(
   const exposed: ExposedPath[] = [];
   const findings: Finding[] = [];
   const origin = `${baseUrl.protocol}//${baseUrl.host}`;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const results = await Promise.allSettled(
@@ -80,6 +102,8 @@ export async function scanPaths(
             cf: { cacheTtl: 0 },
           });
           if (res.status === 200 || res.status === 403) {
+            const body = await res.text().catch(() => "");
+            if (isLikelyNotFound(body, res.status)) return null;
             return { ...item, status: res.status };
           }
           return null;
@@ -115,9 +139,7 @@ export async function scanPaths(
         });
       }
     }
-  } finally {
-    clearTimeout(timer);
-  }
+  } catch {}
 
   return { paths: exposed, findings };
 }

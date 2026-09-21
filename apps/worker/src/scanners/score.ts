@@ -1,10 +1,13 @@
 import type { Finding, Severity } from "../types";
 
-const weights: Record<Severity, number> = { critical: 30, high: 18, medium: 9, low: 3, info: 0 };
+const weights: Record<Severity, number> = { critical: 25, high: 12, medium: 5, low: 2, info: 0 };
 
 export function calculateScore(findings: Finding[], https: boolean): number {
-  let penalty = https ? 0 : 20;
-  for (const finding of findings) penalty += weights[finding.severity];
+  let penalty = https ? 0 : 15;
+  for (const finding of findings) {
+    if (finding.status === "pass" || finding.status === "info") continue;
+    penalty += weights[finding.severity];
+  }
   return Math.max(0, Math.min(100, 100 - Math.round(penalty)));
 }
 

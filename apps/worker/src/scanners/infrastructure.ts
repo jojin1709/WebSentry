@@ -9,20 +9,6 @@ export interface InfraResult {
   altSvc: string | null;
 }
 
-async function checkHttp2(url: string, timeoutMs: number): Promise<boolean | null> {
-  try {
-    const res = await fetch(url, {
-      method: "HEAD",
-      redirect: "manual",
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { "User-Agent": "WebSentry/1.0" },
-    });
-    return (res as any).version === "h2" || (res as any).ok;
-  } catch {
-    return null;
-  }
-}
-
 export async function scanInfrastructure(
   hostname: string,
   finalUrl: URL,
@@ -35,7 +21,12 @@ export async function scanInfrastructure(
   const altSvc = response.headers.get("alt-svc");
   const serverTiming = response.headers.get("server-timing");
   const http3 = altSvc?.toLowerCase().includes("h3") ?? false;
-  const http2 = response.headers.get("x-http2") !== null || http3;
+
+  const via = response.headers.get("via") || "";
+  const cfRay = response.headers.has("cf-ray");
+  const altSvcH2 = altSvc?.toLowerCase().includes("h2") ?? false;
+  const http2ViaHeader = response.headers.get("x-http2") !== null || altSvcH2;
+  const http2 = http2ViaHeader || cfRay;
 
   if (http3) {
     findings.push({
@@ -53,8 +44,8 @@ export async function scanInfrastructure(
       category: "Infrastructure",
       severity: "info",
       status: "pass",
-      title: "HTTP/2 supported",
-      evidence: "Server supports HTTP/2.",
+      title: "HTTP/2 or better detected",
+      evidence: "Server supports HTTP/2 or better.",
       recommendation: "Consider upgrading to HTTP/3 for better performance.",
     });
   } else {
@@ -68,8 +59,6 @@ export async function scanInfrastructure(
       recommendation: "Consider upgrading to HTTP/2 or HTTP/3 for better performance.",
     });
   }
-
-  const ipv6 = dnsA.length === 0;
 
   const DOH = "https://1.1.1.1/dns-query";
   let aaaaRecords: string[] = [];
@@ -108,7 +97,7 @@ export async function scanInfrastructure(
 
   let dnssec: boolean | null = null;
   try {
-    const res = await fetch(`${DOH}?name=${encodeURIComponent(hostname)}&type=A&do=1`, {
+    const res = await fetch(`${DOH}?name=${encodeURIComponent(hostname)}&type=A&cd=0`, {
       headers: { Accept: "application/dns-json" },
       cf: { cacheTtl: 60 },
     });
