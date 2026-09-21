@@ -11,6 +11,10 @@ import { detectTechnologies } from "./scanners/technology";
 import { calculateScore, countSeverities } from "./scanners/score";
 import { scanTls } from "./scanners/tls";
 import { scanPaths } from "./scanners/paths";
+import { scanMixedContent } from "./scanners/mixed-content";
+import { scanForms } from "./scanners/forms";
+import { scanSeo } from "./scanners/seo";
+import { scanCorsDetailed } from "./scanners/cors-detailed";
 import type { Finding, ScanResult } from "./types";
 
 interface Env {
@@ -29,7 +33,7 @@ app.use("*", cors({
   maxAge: 86400,
 }));
 
-app.get("/", (c) => c.json({ name: "WebSentry API", version: "2.0.0", storage: "none" }));
+app.get("/", (c) => c.json({ name: "WebSentry API", version: "3.0.0", storage: "none" }));
 app.get("/health", (c) => c.json({ ok: true, service: "websentry-api" }));
 
 function jsonHeaders() {
@@ -100,8 +104,6 @@ app.post("/api/scan", async (c) => {
       try {
         send("scan", { scanId, target: target.toString(), status: "started" });
 
-        const totalSteps = 9;
-
         send("progress", { key: "dns", name: "DNS analysis", status: "running" });
         const dns = await scanDns(target.hostname);
         findings.push(...dnsFindings(dns));
@@ -137,8 +139,10 @@ app.post("/api/scan", async (c) => {
         send("progress", { key: "cors", name: "CORS analysis", status: "running" });
         const corsFindings = scanCors(response);
         findings.push(...corsFindings);
-        checks.push({ key: "cors", name: "CORS analysis", status: "complete", summary: corsFindings[0]?.title ?? "Completed." });
-        send("progress", { key: "cors", name: "CORS analysis", status: "complete", summary: corsFindings[0]?.title ?? "Completed." });
+        const corsDetail = await scanCorsDetailed(finalUrl, timeoutMs);
+        findings.push(...corsDetail.findings);
+        checks.push({ key: "cors", name: "CORS analysis", status: "complete", summary: corsDetail.cors.allowOrigin ? `Origin: ${corsDetail.cors.allowOrigin}` : corsFindings[0]?.title ?? "Completed." });
+        send("progress", { key: "cors", name: "CORS analysis", status: "complete", summary: checks.at(-1)?.summary });
 
         send("progress", { key: "files", name: "robots.txt and security.txt", status: "running" });
         const [robots, securityTxt] = await Promise.all([
@@ -165,6 +169,21 @@ app.post("/api/scan", async (c) => {
         checks.push({ key: "paths", name: "Exposed paths scan", status: "complete", summary: `${pathResult.paths.length} sensitive path(s) detected.` });
         send("progress", { key: "paths", name: "Exposed paths scan", status: "complete", summary: checks.at(-1)?.summary });
 
+        send("progress", { key: "content", name: "Content analysis", status: "running" });
+        const mixedContent = scanMixedContent(body, finalUrl);
+        findings.push(...mixedContent);
+        const formResult = scanForms(body);
+        findings.push(...formResult.findings);
+        const seoResult = scanSeo(body);
+        findings.push(...seoResult.findings);
+        const contentSummary = [
+          mixedContent.length ? `${mixedContent.length} mixed content` : "No mixed content",
+          `${formResult.forms.length} form(s)`,
+          seoResult.seo.title ? `Title: "${seoResult.seo.title.slice(0, 40)}"` : "No title",
+        ].join(", ");
+        checks.push({ key: "content", name: "Content analysis", status: "complete", summary: contentSummary });
+        send("progress", { key: "content", name: "Content analysis", status: "complete", summary: contentSummary });
+
         const score = calculateScore(findings, tlsResult.tls.https);
         const result: ScanResult = {
           scanId,
@@ -183,6 +202,9 @@ app.post("/api/scan", async (c) => {
           technologies,
           files: { robots, securityTxt },
           exposedPaths: pathResult.paths,
+          forms: formResult.forms,
+          seo: seoResult.seo,
+          corsDetail: corsDetail.cors,
         };
         send("result", result);
         send("scan", { scanId, status: "completed" });

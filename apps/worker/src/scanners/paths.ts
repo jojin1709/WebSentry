@@ -31,7 +31,7 @@ const SENSITIVE_PATHS = [
   { path: "/web.config", title: "web.config exposed", severity: "high" as const, desc: "ASP.NET web.config file is publicly accessible." },
   { path: "/config.json", title: "config.json exposed", severity: "high" as const, desc: "Configuration JSON file is publicly accessible." },
   { path: "/config.yml", title: "config.yml exposed", severity: "high" as const, desc: "Configuration YAML file is publicly accessible." },
-  { path: "/config.xml", title: "config.xml exposed", severity: "high", status: "fail" as const, desc: "Configuration XML file is publicly accessible." },
+  { path: "/config.xml", title: "config.xml exposed", severity: "high" as const, desc: "Configuration XML file is publicly accessible." },
   { path: "/composer.json", title: "composer.json exposed", severity: "medium" as const, desc: "PHP dependency file may reveal package versions." },
   { path: "/package.json", title: "package.json exposed", severity: "medium" as const, desc: "Node.js dependency file may reveal package versions." },
   { path: "/Gemfile", title: "Gemfile exposed", severity: "medium" as const, desc: "Ruby dependency file may reveal package versions." },

@@ -49,6 +49,37 @@ export interface ExposedPath {
   description: string;
 }
 
+export interface FormInfo {
+  action: string;
+  method: string;
+  hasCsrf: boolean;
+  hasAutocompleteOff: boolean;
+  inputTypes: string[];
+}
+
+export interface SeoResult {
+  title: string | null;
+  description: string | null;
+  canonical: string | null;
+  ogTitle: string | null;
+  ogDescription: string | null;
+  ogImage: string | null;
+  robots: string | null;
+  viewport: string | null;
+  lang: string | null;
+  headings: Record<string, number>;
+}
+
+export interface CorsDetail {
+  allowOrigin: string | null;
+  allowMethods: string | null;
+  allowHeaders: string | null;
+  allowCredentials: string | null;
+  maxAge: string | null;
+  exposeHeaders: string | null;
+  preflightRequired: boolean;
+}
+
 export interface ScanResult {
   scanId: string;
   target: string;
@@ -81,4 +112,7 @@ export interface ScanResult {
     securityTxt: { found: boolean; contactCount: number; expires: string | null };
   };
   exposedPaths: ExposedPath[];
+  forms: FormInfo[];
+  seo: SeoResult;
+  corsDetail: CorsDetail;
 }
