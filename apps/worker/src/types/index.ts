@@ -80,6 +80,57 @@ export interface CorsDetail {
   preflightRequired: boolean;
 }
 
+export interface SriResult {
+  totalScripts: number;
+  externalScripts: number;
+  scriptsWithIntegrity: number;
+  totalLinks: number;
+  externalLinks: number;
+  linksWithIntegrity: number;
+}
+
+export interface PerformanceResult {
+  responseTimeMs: number;
+  pageSizeBytes: number;
+  pageSizeFormatted: string;
+  resourceCount: { scripts: number; stylesheets: number; images: number; iframes: number; fonts: number; other: number };
+  renderBlockingScripts: number;
+  renderBlockingStyles: number;
+  totalScriptSize: string;
+  totalStyleSize: string;
+}
+
+export interface A11yResult {
+  imagesTotal: number;
+  imagesWithAlt: number;
+  imagesWithEmptyAlt: number;
+  formsTotal: number;
+  formsWithLabels: number;
+  inputsTotal: number;
+  inputsWithLabels: number;
+  headingStructure: Record<string, number>;
+  hasH1: boolean;
+  h1Count: number;
+  hasLang: boolean;
+  hasSkipLink: boolean;
+  hasAriaLandmarks: boolean;
+  hasRoleAttributes: number;
+}
+
+export interface InfraResult {
+  http2: boolean | null;
+  http3: boolean | null;
+  ipv6: boolean;
+  dnssec: boolean | null;
+  serverTiming: string | null;
+  altSvc: string | null;
+}
+
+export interface JwtInfo {
+  found: boolean;
+  locations: string[];
+}
+
 export interface ScanResult {
   scanId: string;
   target: string;
@@ -115,4 +166,9 @@ export interface ScanResult {
   forms: FormInfo[];
   seo: SeoResult;
   corsDetail: CorsDetail;
+  sri: SriResult;
+  performance: PerformanceResult;
+  accessibility: A11yResult;
+  infrastructure: InfraResult;
+  jwt: JwtInfo;
 }

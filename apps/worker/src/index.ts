@@ -15,6 +15,12 @@ import { scanMixedContent } from "./scanners/mixed-content";
 import { scanForms } from "./scanners/forms";
 import { scanSeo } from "./scanners/seo";
 import { scanCorsDetailed } from "./scanners/cors-detailed";
+import { scanSri } from "./scanners/sri";
+import { scanSourceExposure } from "./scanners/source-exposure";
+import { scanPerformance } from "./scanners/performance";
+import { scanAccessibility } from "./scanners/accessibility";
+import { scanInfrastructure } from "./scanners/infrastructure";
+import { scanJwt } from "./scanners/jwt";
 import type { Finding, ScanResult } from "./types";
 
 interface Env {
@@ -33,7 +39,7 @@ app.use("*", cors({
   maxAge: 86400,
 }));
 
-app.get("/", (c) => c.json({ name: "WebSentry API", version: "3.0.0", storage: "none" }));
+app.get("/", (c) => c.json({ name: "WebSentry API", version: "4.0.0", storage: "none" }));
 app.get("/health", (c) => c.json({ ok: true, service: "websentry-api" }));
 
 function jsonHeaders() {
@@ -176,13 +182,38 @@ app.post("/api/scan", async (c) => {
         findings.push(...formResult.findings);
         const seoResult = scanSeo(body);
         findings.push(...seoResult.findings);
+        const sriResult = scanSri(body);
+        findings.push(...sriResult.findings);
+        const sourceResult = await scanSourceExposure(finalUrl, timeoutMs, body);
+        findings.push(...sourceResult.findings);
+        const jwtResult = scanJwt(body, response.headers.get("set-cookie") || "");
+        findings.push(...jwtResult.findings);
         const contentSummary = [
           mixedContent.length ? `${mixedContent.length} mixed content` : "No mixed content",
           `${formResult.forms.length} form(s)`,
-          seoResult.seo.title ? `Title: "${seoResult.seo.title.slice(0, 40)}"` : "No title",
+          sriResult.sri.scriptsWithIntegrity < sriResult.sri.externalScripts ? "SRI gaps" : "SRI OK",
         ].join(", ");
         checks.push({ key: "content", name: "Content analysis", status: "complete", summary: contentSummary });
         send("progress", { key: "content", name: "Content analysis", status: "complete", summary: contentSummary });
+
+        send("progress", { key: "performance", name: "Performance analysis", status: "running" });
+        const perfResult = scanPerformance(body, fetched.elapsedMs, response.headers.get("content-type"));
+        findings.push(...perfResult.findings);
+        checks.push({ key: "performance", name: "Performance analysis", status: "complete", summary: `${perfResult.perf.pageSizeFormatted}, ${perfResult.perf.responseTimeMs}ms response.` });
+        send("progress", { key: "performance", name: "Performance analysis", status: "complete", summary: checks.at(-1)?.summary });
+
+        send("progress", { key: "a11y", name: "Accessibility audit", status: "running" });
+        const a11yResult = scanAccessibility(body);
+        findings.push(...a11yResult.findings);
+        checks.push({ key: "a11y", name: "Accessibility audit", status: "complete", summary: `${a11yResult.a11y.imagesTotal} images, ${a11yResult.a11y.inputsWithLabels}/${a11yResult.a11y.inputsTotal} labeled inputs.` });
+        send("progress", { key: "a11y", name: "Accessibility audit", status: "complete", summary: checks.at(-1)?.summary });
+
+        send("progress", { key: "infra", name: "Infrastructure check", status: "running" });
+        const infraResult = await scanInfrastructure(target.hostname, finalUrl, response, dns.A, timeoutMs);
+        findings.push(...infraResult.findings);
+        const httpVer = infraResult.infra.http3 ? "HTTP/3" : infraResult.infra.http2 ? "HTTP/2" : "HTTP/1.1";
+        checks.push({ key: "infra", name: "Infrastructure check", status: "complete", summary: `${httpVer}, IPv6: ${infraResult.infra.ipv6 ? "yes" : "no"}, DNSSEC: ${infraResult.infra.dnssec === true ? "yes" : infraResult.infra.dnssec === false ? "no" : "unknown"}.` });
+        send("progress", { key: "infra", name: "Infrastructure check", status: "complete", summary: checks.at(-1)?.summary });
 
         const score = calculateScore(findings, tlsResult.tls.https);
         const result: ScanResult = {
@@ -205,6 +236,11 @@ app.post("/api/scan", async (c) => {
           forms: formResult.forms,
           seo: seoResult.seo,
           corsDetail: corsDetail.cors,
+          sri: sriResult.sri,
+          performance: perfResult.perf,
+          accessibility: a11yResult.a11y,
+          infrastructure: infraResult.infra,
+          jwt: jwtResult.jwt,
         };
         send("result", result);
         send("scan", { scanId, status: "completed" });
